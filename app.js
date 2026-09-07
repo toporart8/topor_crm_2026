@@ -108,6 +108,31 @@ let isOnline = false;
 let currentProject = localStorage.getItem('topordorf_project') || 'topor'; // 'topor' | 'figurines' | 'chat'
 let currentRole = localStorage.getItem('topordorf_role') || 'admin';       // 'admin' | 'employee'
 let currentEmployeeId = localStorage.getItem('topordorf_emp_id') || 'emp_1';
+// URL-параметры для прямого входа сотрудника по персональной ссылке (например: ?emp=1111)
+(function checkUrlAuth() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const empParam = params.get('emp') || params.get('pin');
+    if (empParam) {
+      const emps = figurines.employees || [
+        { id: "emp_1", name: "Вероника", pin: "1111" },
+        { id: "emp_2", name: "Катя", pin: "2222" },
+        { id: "emp_3", name: "Дмитрий", pin: "3333" }
+      ];
+      const found = emps.find(e => e.id === empParam || e.pin === empParam || e.name.toLowerCase() === empParam.toLowerCase());
+      if (found) {
+        currentRole = 'employee';
+        currentEmployeeId = found.id;
+        currentProject = 'figurines';
+        view = 'emp_workspace';
+        localStorage.setItem('topordorf_role', 'employee');
+        localStorage.setItem('topordorf_emp_id', found.id);
+        localStorage.setItem('topordorf_project', 'figurines');
+      }
+    }
+  } catch(e) {}
+})();
+
 let activeChatChannel = 'general';
 
 let figurines = {
@@ -1175,34 +1200,68 @@ function openShiftModal() {
 function openRoleSwitchModal() {
   const dialog = document.getElementById('small-dialog');
   const employees = figurines.employees || [];
+  const origin = window.location.origin + window.location.pathname;
   
   document.getElementById('small-body').innerHTML = `
     <div class="dialog-head">
-      <h2 id="small-title">Смена рабочего пространства</h2>
+      <h2 id="small-title">Вход и рабочие пространства</h2>
       <button type="button" class="close" data-close="small">×</button>
     </div>
     <div class="dialog-content">
-      <p class="field-hint" style="margin-bottom:16px">Выберите ваш профиль для входа:</p>
+      <p class="field-hint" style="margin-bottom:14px">Выберите ваш профиль для быстрого переключения или скопируйте персональную ссылку для мастера:</p>
       
       <div style="display:flex;flex-direction:column;gap:10px">
-        <button class="button ${currentRole === 'admin' ? 'primary' : 'light'}" style="justify-content:flex-start;padding:14px 18px" data-set-role="admin">
-          👑 <strong>Руководитель (Полный доступ, админка)</strong>
-        </button>
+        <div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:rgba(255,255,255,0.03)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:700;font-size:15px">👑 Руководитель (Админка)</div>
+              <small class="meta">Полный доступ: топоры, дашборд FBS, касса, все чаты</small>
+            </div>
+            <button class="button ${currentRole === 'admin' ? 'primary' : 'light'}" data-set-role="admin">
+              ${currentRole === 'admin' ? '✓ Активен' : 'Войти'}
+            </button>
+          </div>
+        </div>
 
-        <div class="section-title">Мастера цеха</div>
-        ${employees.map(e => `
-          <button class="button ${currentRole === 'employee' && currentEmployeeId === e.id ? 'primary' : 'light'}" style="justify-content:space-between;padding:12px 18px" data-set-emp="${e.id}">
-            <span>👷 <strong>${esc(e.name)}</strong> (ПИН: ${esc(e.pin)})</span>
-            <span class="meta">${rub(e.balance || 0)}</span>
-          </button>
-        `).join('')}
+        <div class="section-title" style="margin-top:10px">Мастера производства фигурок</div>
+        ${employees.map(e => {
+          const empLink = `${origin}?emp=${e.pin}`;
+          return `
+          <div style="border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,0.02)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-weight:700;font-size:15px">👷 ${esc(e.name)}</div>
+                <small class="meta">ПИН-код: <code>${esc(e.pin)}</code> · Баланс: <strong style="color:var(--gold)">${rub(e.balance || 0)}</strong></small>
+              </div>
+              <button class="button ${currentRole === 'employee' && currentEmployeeId === e.id ? 'primary' : 'light'}" data-set-emp="${e.id}">
+                ${currentRole === 'employee' && currentEmployeeId === e.id ? '✓ Активен' : 'Войти'}
+              </button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.08)">
+              <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">Ссылка для смартфона:</span>
+              <input type="text" readonly value="${empLink}" style="font-size:11px;padding:4px 8px;height:26px;flex:1;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:4px;color:var(--text)" id="link-emp-${e.id}">
+              <button class="button light" style="font-size:11px;padding:4px 8px;height:26px" data-copy-link="${empLink}">Копировать</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
     </div>
     <div class="dialog-actions">
-      <button class="button" data-close="small">Отмена</button>
+      <button class="button" data-close="small">Закрыть</button>
     </div>
   `;
   dialog.showModal();
+
+  dialog.querySelectorAll('[data-copy-link]').forEach(btn => {
+    btn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copyLink);
+        toast('Персональная ссылка скопирована! Отправьте её мастеру');
+      } catch (err) {
+        toast('Выделите и скопируйте ссылку из поля');
+      }
+    };
+  });
 }
 
 function openPayoutModal(employeeId) {
@@ -1689,8 +1748,15 @@ document.addEventListener('click', e => {
   // 4. Переключение роли из модалки
   const setRoleBtn = e.target.closest('[data-set-role]');
   if (setRoleBtn) {
-    currentRole = setRoleBtn.dataset.setRole;
-    localStorage.setItem('topordorf_role', currentRole);
+    if (currentRole === 'employee') {
+      const pass = prompt('Вход в панель руководителя. Введите пароль (по умолчанию 7417):');
+      if (!pass || pass.trim() !== '7417') {
+        toast('Неверный пароль руководителя');
+        return;
+      }
+    }
+    currentRole = 'admin';
+    localStorage.setItem('topordorf_role', 'admin');
     smallDialog.close();
     toast('Режим: Руководитель (Админка)');
     if (currentProject === 'figurines') view = 'fig_dashboard';
@@ -1700,13 +1766,24 @@ document.addEventListener('click', e => {
 
   const setEmpBtn = e.target.closest('[data-set-emp]');
   if (setEmpBtn) {
+    const targetEmpId = setEmpBtn.dataset.setEmp;
+    const emp = (figurines.employees || []).find(x => x.id === targetEmpId);
+    if (!emp) return;
+
+    if (currentRole === 'employee' && currentEmployeeId !== targetEmpId) {
+      const inputPin = prompt(`Введите ПИН-код мастера ${emp.name} (по умолчанию ${emp.pin}):`);
+      if (!inputPin || inputPin.trim() !== String(emp.pin).trim()) {
+        toast('Неверный ПИН-код');
+        return;
+      }
+    }
+
     currentRole = 'employee';
-    currentEmployeeId = setEmpBtn.dataset.setEmp;
-    localStorage.setItem('topordorf_role', currentRole);
+    currentEmployeeId = targetEmpId;
+    localStorage.setItem('topordorf_role', 'employee');
     localStorage.setItem('topordorf_emp_id', currentEmployeeId);
     smallDialog.close();
-    const emp = figurines.employees?.find(x => x.id === currentEmployeeId);
-    toast(`Вход выполнен: ${emp?.name || 'Сотрудник'}`);
+    toast(`Вход выполнен: ${emp.name}`);
     if (currentProject === 'figurines') view = 'emp_workspace';
     render();
     return;
