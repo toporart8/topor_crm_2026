@@ -105,21 +105,27 @@ let lastServerTimestamp = '';
 let isOnline = false;
 
 // --- Состояние модуля Фигурок и Чат ---
+const DEFAULT_EMPLOYEES = [
+  { id: "emp_1", name: "Вероника", pin: "1111", balance: 3680 },
+  { id: "emp_2", name: "Катя", pin: "2222", balance: 0 },
+  { id: "emp_3", name: "Дмитрий", pin: "3333", balance: 0 }
+];
+
 let currentProject = localStorage.getItem('topordorf_project') || 'topor'; // 'topor' | 'figurines' | 'chat'
 let currentRole = localStorage.getItem('topordorf_role') || 'admin';       // 'admin' | 'employee'
 let currentEmployeeId = localStorage.getItem('topordorf_emp_id') || 'emp_1';
-// URL-параметры для прямого входа сотрудника по персональной ссылке (например: ?emp=1111)
-(function checkUrlAuth() {
+
+function checkUrlAuth() {
   try {
     const params = new URLSearchParams(window.location.search);
-    const empParam = params.get('emp') || params.get('pin');
+    const empParam = (params.get('emp') || params.get('pin') || params.get('worker') || params.get('user') || '').trim();
     if (empParam) {
-      const emps = figurines.employees || [
-        { id: "emp_1", name: "Вероника", pin: "1111" },
-        { id: "emp_2", name: "Катя", pin: "2222" },
-        { id: "emp_3", name: "Дмитрий", pin: "3333" }
-      ];
-      const found = emps.find(e => e.id === empParam || e.pin === empParam || e.name.toLowerCase() === empParam.toLowerCase());
+      const emps = (typeof figurines !== 'undefined' && figurines.employees && figurines.employees.length) ? figurines.employees : DEFAULT_EMPLOYEES;
+      const found = emps.find(e => 
+        e.id === empParam || 
+        String(e.pin).trim() === empParam || 
+        e.name.toLowerCase() === empParam.toLowerCase()
+      );
       if (found) {
         currentRole = 'employee';
         currentEmployeeId = found.id;
@@ -128,10 +134,20 @@ let currentEmployeeId = localStorage.getItem('topordorf_emp_id') || 'emp_1';
         localStorage.setItem('topordorf_role', 'employee');
         localStorage.setItem('topordorf_emp_id', found.id);
         localStorage.setItem('topordorf_project', 'figurines');
+        if (location.hash !== '#emp_workspace' && location.hash !== '#emp_plan' && location.hash !== '#emp_shifts') {
+          location.hash = '#emp_workspace';
+        }
+        return found;
       }
     }
-  } catch(e) {}
-})();
+  } catch(e) {
+    console.warn('URL auth check:', e);
+  }
+  return null;
+}
+
+// Первичная проверка при старте
+checkUrlAuth();
 
 let activeChatChannel = 'general';
 
@@ -328,8 +344,13 @@ function loadState() {
 }
 
 function initData() {
-  if (!loadState()) {
-    saveState();
+  loadState();
+  checkUrlAuth();
+  if (currentRole === 'employee') {
+    currentProject = 'figurines';
+    if (!['emp_workspace', 'emp_plan', 'emp_shifts'].includes(view)) {
+      view = 'emp_workspace';
+    }
   }
   fetchServerState();
 }
@@ -378,32 +399,64 @@ function getActiveViews() {
 }
 
 function updateHeaderAndSidebar() {
+  const isEmp = currentRole === 'employee';
+  const emp = (figurines.employees || DEFAULT_EMPLOYEES).find(e => e.id === currentEmployeeId) || { name: 'Мастер' };
+
+  // Проектный переключатель (Топоры / Фигурки)
+  const projectSelector = document.getElementById('project-selector');
+  if (projectSelector) {
+    projectSelector.style.display = isEmp ? 'none' : 'flex';
+  }
   document.querySelectorAll('.project-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.proj === currentProject);
   });
-  
+
+  // Демо-баннер со сбросом и выгрузкой JSON скрываем для мастеров
+  const demoBanner = document.querySelector('.demo-banner');
+  if (demoBanner) {
+    demoBanner.style.display = isEmp ? 'none' : 'flex';
+  }
+
+  // Боковая плашка мастерской
+  const sideNote = document.querySelector('.side-note');
+  if (sideNote) {
+    if (isEmp) {
+      sideNote.innerHTML = '<span class="small-line"></span><strong>Цех «Обережье»</strong><p>Рабочее место мастера.<br>Баланс считается автоматически.</p>';
+    } else {
+      sideNote.innerHTML = '<span class="small-line"></span><strong>Всё начинается<br>с хорошего замысла.</strong><p>А продолжается порядком<br>в делах мастерской.</p>';
+    }
+  }
+
+  // Логотип в меню
+  const brandSub = document.querySelector('.brand small');
+  if (brandSub) {
+    brandSub.textContent = isEmp ? 'ЦЕХ ФИГУРОК · МАСТЕР' : 'МАСТЕРСКАЯ · CRM';
+  }
+
+  // Кнопка переключения роли в шапке
   const roleBtn = document.getElementById('role-switch-btn');
   const userAvatar = document.getElementById('user-avatar');
   const userDisplayName = document.getElementById('user-display-name');
   const userDisplayRole = document.getElementById('user-display-role');
-  
-  if (currentRole === 'admin') {
+
+  if (!isEmp) {
     if (roleBtn) {
       roleBtn.innerHTML = '👑 Руководитель';
       roleBtn.className = 'role-badge-btn';
+      roleBtn.title = 'Режим руководителя. Нажмите для смены профиля';
     }
     if (userAvatar) userAvatar.textContent = 'М';
     if (userDisplayName) userDisplayName.textContent = 'Моя мастерская';
     if (userDisplayRole) userDisplayRole.textContent = 'Руководитель (Админка)';
   } else {
-    const emp = figurines.employees?.find(e => e.id === currentEmployeeId) || { name: 'Сотрудник' };
     if (roleBtn) {
-      roleBtn.innerHTML = `👷 ${esc(emp.name)}`;
+      roleBtn.innerHTML = `👷 ${esc(emp.name)} <small style="opacity:0.8;font-size:11px;margin-left:4px">(Выйти)</small>`;
       roleBtn.className = 'role-badge-btn emp';
+      roleBtn.title = 'Вы вошли как мастер. Нажмите, чтобы выйти или сменить профиль';
     }
     if (userAvatar) userAvatar.textContent = emp.name.slice(0, 1);
     if (userDisplayName) userDisplayName.textContent = emp.name;
-    if (userDisplayRole) userDisplayRole.textContent = 'Сотрудник цеха';
+    if (userDisplayRole) userDisplayRole.textContent = 'Мастер производства';
   }
 }
 
@@ -456,12 +509,13 @@ function render() {
 }
 
 function setView() {
+  checkUrlAuth();
   const hash = location.hash.slice(1);
   const validViews = getActiveViews().map(x => x[0]);
   if (validViews.includes(hash)) {
     view = hash;
   } else {
-    view = validViews[0] || 'orders';
+    view = (currentRole === 'employee') ? 'emp_workspace' : (validViews[0] || 'orders');
   }
   tab = 'all';
   query = '';
