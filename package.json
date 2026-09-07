@@ -1,0 +1,16 @@
+{
+  "name": "topordorf-crm",
+  "version": "1.0.0",
+  "description": "Сервер CRM мастерской ТопорДорф с автоматической синхронизацией между устройствами",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "crm",
+    "topordorf",
+    "workshop"
+  ],
+  "author": "ТопорДорф",
+  "license": "ISC"
+}
