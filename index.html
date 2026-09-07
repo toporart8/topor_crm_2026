@@ -1,11 +1,36 @@
 <!doctype html>
 <html lang="ru">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#182320"><meta name="description" content="Личная CRM мастерской ТопорДорф — заказы, эскизы и взаиморасчёты."><title>ТопорДорф · Заказы мастерской</title><link rel="stylesheet" href="styles.css?v=5"><script defer src="app.js?v=5"></script></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#182320"><meta name="description" content="Личная CRM мастерской ТопорДорф — заказы, цех фигурок и взаиморасчёты."><title>ТопорДорф · Мастерская и производство</title><link rel="stylesheet" href="styles.css?v=6"><script defer src="app.js?v=6"></script></head>
 <body>
-<aside class="sidebar"><a class="brand" href="#orders"><span class="brand-symbol">ТД</span><span>ТОПОРДОРФ<small>МАСТЕРСКАЯ · CRM</small></span></a><div class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div><nav id="navigation" aria-label="Разделы CRM"></nav><div class="side-note"><span class="small-line"></span><strong>Всё начинается<br>с хорошего замысла.</strong><p>А продолжается порядком<br>в делах мастерской.</p></div><div class="owner"><span class="avatar">М</span><div>Моя мастерская<small>Личный кабинет</small></div></div></aside>
-<div class="workspace"><header class="topbar"><span id="breadcrumb">Мастерская <span>/</span> Заказы</span><div class="top-right"><span id="today"></span><span class="private-label">Личный доступ</span></div></header><main><div class="demo-banner"><span><b>Локальный режим</b> · Данные сохраняются в браузере.</span><div class="banner-actions"><button id="export-json" class="text-button" title="Скачать резервную копию заказов и взаиморасчетов в формате JSON">Скачать JSON</button><label id="import-json-label" class="text-button" style="cursor:pointer" title="Загрузить сохраненную базу из JSON">Загрузить JSON<input type="file" id="import-json" accept=".json" style="display:none"></label><button id="reset" class="text-button" title="Сбросить к первоначальным демо-примерам">Сбросить</button></div></div><div id="content"></div></main><footer>ТОПОРДОРФ <span>Порядок в заказах. Внимание к деталям.</span><span>Прототип · 01</span></footer></div>
+<aside class="sidebar">
+  <a class="brand" href="#orders"><span class="brand-symbol">ТД</span><span>ТОПОРДОРФ<small>МАСТЕРСКАЯ · CRM</small></span></a>
+  <div class="project-selector" id="project-selector">
+    <button type="button" class="project-btn active" data-proj="topor">🪓 Заказы топоров</button>
+    <button type="button" class="project-btn" data-proj="figurines">🗿 Цех фигурок</button>
+  </div>
+  <div class="nav-label" id="nav-label">РАЗДЕЛЫ</div>
+  <nav id="navigation" aria-label="Разделы CRM"></nav>
+  <div class="side-note"><span class="small-line"></span><strong>Всё начинается<br>с хорошего замысла.</strong><p>А продолжается порядком<br>в делах мастерской.</p></div>
+  <div class="owner" id="owner-box"><span class="avatar" id="user-avatar">М</span><div><strong id="user-display-name">Моя мастерская</strong><small id="user-display-role">Руководитель (Админка)</small></div></div>
+</aside>
+<div class="workspace">
+  <header class="topbar">
+    <span id="breadcrumb">Мастерская <span>/</span> Заказы</span>
+    <div class="top-right">
+      <button id="chat-nav-btn" class="button light chat-header-btn" type="button" title="Открыть чат цеха">💬 Чат <span id="chat-badge" class="chat-badge" style="display:none">0</span></button>
+      <span id="today"></span>
+      <button id="role-switch-btn" class="role-badge-btn" type="button" title="Нажмите, чтобы переключить режим доступа">👑 Руководитель</button>
+    </div>
+  </header>
+  <main>
+    <div class="demo-banner"><span><b>Синхронизация</b> · Данные сохраняются на сервере мастерской.</span><div class="banner-actions"><button id="export-json" class="text-button" title="Скачать резервную копию базы в формате JSON">Скачать JSON</button><label id="import-json-label" class="text-button" style="cursor:pointer" title="Загрузить сохраненную базу из JSON">Загрузить JSON<input type="file" id="import-json" accept=".json" style="display:none"></label><button id="reset" class="text-button" title="Сбросить к первоначальным демо-примерам">Сбросить</button></div></div>
+    <div id="content"></div>
+  </main>
+  <footer>ТОПОРДОРФ <span>Порядок в заказах и на производстве.</span><span>Версия · 2.0</span></footer>
+</div>
 <dialog id="order-dialog" class="order-dialog" aria-labelledby="order-title"><div id="order-body"></div></dialog>
 <dialog id="small-dialog" class="small-dialog" aria-labelledby="small-title"><div id="small-body"></div></dialog>
 <dialog id="sketch-dialog" class="order-dialog sketch-dialog" aria-labelledby="sketch-title"></dialog>
+<dialog id="fig-dialog" class="order-dialog" aria-labelledby="fig-title"><div id="fig-body"></div></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 </body></html>

@@ -164,23 +164,40 @@ const server = http.createServer(async (req, res) => {
   // --- REST API МАРШРУТЫ ---
   if (pathname.startsWith('/api/')) {
     try {
-      // POST /api/login — авторизация по паролю
+      // POST /api/login — авторизация руководителя по паролю
       if (pathname === '/api/login' && method === 'POST') {
         const body = await parseJSONBody(req);
         if (body && String(body.password).trim() === String(CRM_PASSWORD).trim()) {
-          return sendJSON(res, 200, { success: true, token: AUTH_TOKEN });
+          return sendJSON(res, 200, { success: true, token: AUTH_TOKEN, role: 'admin' });
         } else {
           return sendJSON(res, 401, { success: false, error: 'Неверный пароль' });
         }
       }
 
-      // Проверка авторизации для остальных API запросов
+      // POST /api/employee/login — авторизация сотрудника цеха по ПИН-коду
+      if (pathname === '/api/employee/login' && method === 'POST') {
+        const body = await parseJSONBody(req);
+        const store = loadStore();
+        const employees = store.figurines?.employees || [];
+        const emp = employees.find(e => (e.id === body.employeeId || e.name === body.name) && String(e.pin).trim() === String(body.pin).trim());
+        if (emp) {
+          return sendJSON(res, 200, { success: true, employee: { id: emp.id, name: emp.name }, role: 'employee' });
+        } else {
+          return sendJSON(res, 401, { success: false, error: 'Неверный ПИН-код сотрудника' });
+        }
+      }
+
+      // Проверка авторизации: либо токен руководителя, либо заголовок сотрудника
       const clientToken = req.headers['x-crm-token'] || parsedUrl.query.token;
-      if (clientToken !== AUTH_TOKEN) {
+      const empHeader = req.headers['x-employee-id'];
+      const isAdmin = clientToken === AUTH_TOKEN;
+      const isEmployee = Boolean(empHeader);
+
+      if (!isAdmin && !isEmployee) {
         return sendJSON(res, 401, { error: 'Требуется авторизация', requireAuth: true });
       }
 
-      // GET /api/state — получение полного состояния
+      // GET /api/state — получение состояния (руководитель получает всё, сотрудник — модуль фигурок)
       if (pathname === '/api/state' && method === 'GET') {
         const store = loadStore();
         return sendJSON(res, 200, store);
@@ -189,19 +206,43 @@ const server = http.createServer(async (req, res) => {
       // POST /api/state — полное обновление состояния
       if (pathname === '/api/state' && method === 'POST') {
         const body = await parseJSONBody(req);
-        if (!body || !Array.isArray(body.orders) || !Array.isArray(body.ledger)) {
-          return sendJSON(res, 400, { error: 'Неверный формат состояния. Ожидались массивы orders и ledger.' });
-        }
         const current = loadStore();
-        current.orders = body.orders;
-        current.ledger = body.ledger;
+        if (body.orders && Array.isArray(body.orders)) current.orders = body.orders;
+        if (body.ledger && Array.isArray(body.ledger)) current.ledger = body.ledger;
+        if (body.figurines && typeof body.figurines === 'object') current.figurines = body.figurines;
         if (body.sequence) current.sequence = Number(body.sequence);
         saveStore(current);
         return sendJSON(res, 200, { success: true, updatedAt: current.updatedAt });
       }
 
+      // POST /api/chat/message — отправка сообщения в чат (общий или личный)
+      if (pathname === '/api/chat/message' && method === 'POST') {
+        const body = await parseJSONBody(req);
+        if (!body || !body.text || !body.channel) {
+          return sendJSON(res, 400, { error: 'Текст сообщения и канал обязательны' });
+        }
+        const current = loadStore();
+        if (!current.figurines) current.figurines = {};
+        if (!Array.isArray(current.figurines.messages)) current.figurines.messages = [];
+        
+        const newMsg = {
+          id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          channel: body.channel, // 'general' или 'private_emp_1' и т.д.
+          author: body.author || (isAdmin ? 'Руководитель' : 'Сотрудник'),
+          authorRole: body.authorRole || (isAdmin ? 'admin' : 'employee'),
+          authorId: body.authorId || (isAdmin ? 'admin' : empHeader),
+          text: String(body.text).trim(),
+          time: new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+                new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        };
+        current.figurines.messages.push(newMsg);
+        saveStore(current);
+        return sendJSON(res, 201, { success: true, message: newMsg, updatedAt: current.updatedAt });
+      }
+
       // POST /api/reset — сброс данных к демо-состоянию
       if (pathname === '/api/reset' && method === 'POST') {
+        if (!isAdmin) return sendJSON(res, 403, { error: 'Только руководитель может сбрасывать данные' });
         const seed = getSeedState();
         saveStore(seed);
         return sendJSON(res, 200, { success: true, message: 'Демо-данные восстановлены', state: seed });
